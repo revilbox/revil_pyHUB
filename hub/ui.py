@@ -13,7 +13,6 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# ---------- palette: strict, white + red accent ----------
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -32,7 +31,6 @@ SUCCESS = GREEN
 ERROR = RED
 WARN = YELLOW
 
-# ---------- box chars ----------
 TL, TR, BL, BR = "┌", "┐", "└", "┘"
 H, V = "─", "│"
 LT, RT = "├", "┤"
@@ -49,7 +47,6 @@ def vlen(s: str) -> int:
 
 
 def fit(s: str, width: int) -> str:
-    """Cut a possibly-colored string to visible width, ANSI-safe, then pad to exactly width."""
     if width <= 0:
         return ""
     out = []
@@ -62,12 +59,10 @@ def fit(s: str, width: int) -> str:
             i = m.end()
             continue
         if visible >= width:
-            # skip rest but keep reset at end
             break
         out.append(s[i])
         visible += 1
         i += 1
-    # pad
     if visible < width:
         out.append(" " * (width - visible))
     out.append(RESET)
@@ -75,11 +70,12 @@ def fit(s: str, width: int) -> str:
 
 
 def term_width() -> int:
+    """Usable width. Reserve 2 columns as a safety margin for Termux quirks."""
     try:
         w = shutil.get_terminal_size((80, 24)).columns
     except Exception:
         w = 80
-    return max(40, min(w, 200))
+    return max(40, min(w, 200)) - 2
 
 
 def term_height() -> int:
@@ -95,7 +91,7 @@ def clear():
 
 
 def wait_key(msg="press any key"):
-    print(f"\n{DIM}{msg}{RESET}")
+    print(f"\n{MUTED}{msg}{RESET}")
     readchar.readkey()
 
 
@@ -133,12 +129,11 @@ def print_header(section: str = ""):
     left = f"{BOLD}{TEXT}revil_pyHUB{RESET}"
     if section:
         left += f" {MUTED}/{RESET} {ACCENT}{section}{RESET}"
-    right = f"{MUTED}v0.5.0{RESET}"
+    # reserve one space at the end to avoid overflow
     lv = vlen(left)
-    rv = vlen(right)
-    space = max(1, width - lv - rv - 1)
+    space = max(1, width - lv - 3)
     print(box_top(width=width))
-    print(ACCENT + V + RESET + " " + left + " " * space + right + ACCENT + V + RESET)
+    print(ACCENT + V + RESET + " " + left + " " * space + " " + ACCENT + V + RESET)
     print(box_sep(width))
 
 
@@ -146,6 +141,6 @@ def print_status_bar(left: str, right: str = ""):
     width = term_width()
     lv = vlen(left)
     rv = vlen(right)
-    space = max(0, width - lv - rv - 3)
+    space = max(1, width - lv - rv - 3)
     print(ACCENT + V + RESET + " " + left + " " * space + right + " " + ACCENT + V + RESET)
     print(box_bottom())
