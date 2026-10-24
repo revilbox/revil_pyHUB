@@ -4,9 +4,10 @@ from pathlib import Path
 
 from .ui import (
     clear, wait_key, readchar, term_width, print_status_bar,
-    CYAN, GREEN, YELLOW, RED, BOLD, DIM, RESET,
+    CYAN, GREEN, YELLOW, RED, BOLD, DIM, RESET, REPO_ROOT,
 )
 from .runner import run_python
+from .git_ops import git_pull
 from . import config
 
 
@@ -32,19 +33,6 @@ def _preview(path: Path) -> str:
         return f"<cannot read: {e}>"
 
 
-def _file_ops(cwd: Path, index: int, items) -> bool:
-    """Returns True if screen should re-render after op."""
-    if not items:
-        return False
-    target = items[index]
-    key = None
-
-    # --- rename
-    if _last_key == readchar.key.F2 if hasattr(readchar.key, "F2") else _last_key == "\x1bOQ":
-        pass
-    return False
-
-
 def screen_explorer():
     cfg = config.load()
     cwd = Path(cfg["start_dir"]).expanduser()
@@ -68,6 +56,8 @@ def screen_explorer():
         clear()
         print(f"{BOLD}revil_pyHUB{RESET} / file explorer")
         print(f"{DIM}Path: {cwd}{RESET}")
+        if cfg.get("active_venv"):
+            print(f"{DIM}venv: {cfg['active_venv']}{RESET}")
         print("=" * width)
 
         prev = _preview(items[index]) if items else ""
@@ -109,7 +99,6 @@ def screen_explorer():
 
         key = readchar.readkey()
 
-        # --- navigation
         if key == readchar.key.UP:
             index = max(0, index - 1)
         elif key == readchar.key.DOWN:
@@ -141,17 +130,13 @@ def screen_explorer():
                 except FileNotFoundError:
                     print(f"Editor not found: {editor}")
                     wait_key()
-        # --- back / quit / update
         elif key in ("b", "B"):
             return
         elif key in ("u", "U"):
-            from .git_ops import git_pull
-            from .ui import REPO_ROOT
             message = git_pull(REPO_ROOT)[:width]
             wait_key()
         elif key in ("q", "Q"):
             return
-        # --- new file
         elif key in ("n", "N"):
             clear()
             print("New file name (empty to cancel):")
@@ -166,7 +151,6 @@ def screen_explorer():
                         message = f"Created {name}"
                     except Exception as e:
                         message = f"Failed: {e}"
-        # --- new dir
         elif key in ("m", "M"):
             clear()
             print("New directory name (empty to cancel):")
@@ -180,7 +164,6 @@ def screen_explorer():
                     message = "Directory already exists"
                 except Exception as e:
                     message = f"Failed: {e}"
-        # --- rename
         elif key == getattr(readchar.key, "F2", "\x1bOQ"):
             if items and items[index].name != "..":
                 target = items[index]
@@ -193,7 +176,6 @@ def screen_explorer():
                         message = f"Renamed to {new_name}"
                     except Exception as e:
                         message = f"Failed: {e}"
-        # --- delete
         elif key == readchar.key.DELETE or key == "\x1b[3~":
             if items and items[index].name != "..":
                 target = items[index]
@@ -211,8 +193,7 @@ def screen_explorer():
                         index = max(0, index - 1)
                     except Exception as e:
                         message = f"Failed: {e}"
-        # --- goto path
-        elif key == "\x0c":  # Ctrl+L
+        elif key == "\x0c":
             clear()
             print("Go to path (empty to cancel):")
             p = input("> ").strip()
