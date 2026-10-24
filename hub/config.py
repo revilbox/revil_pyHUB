@@ -8,8 +8,9 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 DEFAULTS = {
     "start_dir": str(Path.home()),
     "auto_update": False,
-    "editor": "nano",
+    "editor": "micro",
     "python_bin": "",
+    "active_venv": "",
 }
 
 
