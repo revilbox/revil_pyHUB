@@ -1,8 +1,8 @@
-"""Main menu."""
+"""Main menu - strict, flat."""
 from .ui import (
-    clear, print_logo, readchar, term_width, print_header,
-    box_top, box_mid, box_sep, box_bottom, pad_ansi,
-    ACCENT, ACCENT2, BOLD, DIM, MUTED, RESET, V,
+    clear, readchar, term_width, print_header,
+    box_top, box_line, box_bottom,
+    ACCENT, TEXT, MUTED, RESET, BOLD,
 )
 from .explorer import screen_explorer
 from .screens import (
@@ -12,34 +12,28 @@ from .screens import (
 from .games import screen_games
 
 MENU_ITEMS = [
-    ("1", "File explorer", "browse and run files"),
-    ("2", "Run Python script", "with args and venv"),
-    ("3", "Settings", "editor, paths, venv"),
-    ("4", "Update from git", "pull latest version"),
-    ("5", "Environments", "manage venv"),
-    ("6", "Run history", "recent executions"),
-    ("7", "Games", "small breaks"),
-    ("8", "About", "info"),
-    ("0", "Exit", ""),
+    ("1", "file explorer"),
+    ("2", "run python script"),
+    ("3", "settings"),
+    ("4", "update from git"),
+    ("5", "environments"),
+    ("6", "run history"),
+    ("7", "games"),
+    ("8", "about"),
+    ("0", "exit"),
 ]
 
 
 def render():
     clear()
-    print_logo()
-    print(f"{MUTED}  terminal hub for python on termux{RESET}")
-    print()
-
     width = term_width()
-    print(box_top(" MAIN MENU "))
-    for key, label, desc in MENU_ITEMS:
-        line = (
-            f"{ACCENT}[{key}]{RESET} {BOLD}{label}{RESET}"
-            + (f"  {DIM}{desc}{RESET}" if desc else "")
-        )
-        print(ACCENT + V + RESET + " " + pad_ansi(line, width - 4) + " " + ACCENT + V + RESET)
-    print(box_bottom())
-    print(f"{MUTED}  press a number, Q to quit{RESET}")
+    print_header("MAIN")
+    print(box_top(width=width))
+    for key, label in MENU_ITEMS:
+        line = f"{ACCENT}{BOLD}[{key}]{RESET}  {TEXT}{label}{RESET}"
+        print(box_line(line, width))
+    print(box_bottom(width))
+    print(f"{MUTED}press 0-8, q to quit{RESET}")
 
 
 def main_menu() -> str:
