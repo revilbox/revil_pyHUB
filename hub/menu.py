@@ -1,4 +1,4 @@
-"""Main menu - strict, flat."""
+"""Main menu - strict, flat, monochrome."""
 from .ui import (
     clear, readchar, term_width, print_header,
     box_top, box_line, box_bottom,
@@ -27,10 +27,10 @@ MENU_ITEMS = [
 def render():
     clear()
     width = term_width()
-    print_header("MAIN")
+    print_header()
     print(box_top(width=width))
     for key, label in MENU_ITEMS:
-        line = f"{ACCENT}{BOLD}[{key}]{RESET}  {TEXT}{label}{RESET}"
+        line = f"{MUTED}[{key}]{RESET}  {TEXT}{label}{RESET}"
         print(box_line(line, width))
     print(box_bottom(width))
     print(f"{MUTED}press 0-8, q to quit{RESET}")
