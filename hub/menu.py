@@ -1,32 +1,45 @@
 """Main menu."""
-from .ui import clear, print_logo, readchar, term_width, DIM, RESET
+from .ui import (
+    clear, print_logo, readchar, term_width, print_header,
+    box_top, box_mid, box_sep, box_bottom, pad_ansi,
+    ACCENT, ACCENT2, BOLD, DIM, MUTED, RESET, V,
+)
 from .explorer import screen_explorer
 from .screens import (
     screen_run, screen_settings, screen_update, screen_about,
     screen_envs, screen_history,
 )
+from .games import screen_games
 
 MENU_ITEMS = [
-    ("1", "File explorer"),
-    ("2", "Run Python script"),
-    ("3", "Settings"),
-    ("4", "Update from git"),
-    ("5", "About"),
-    ("6", "Environments (venv)"),
-    ("7", "Run history"),
-    ("0", "Exit"),
+    ("1", "File explorer", "browse and run files"),
+    ("2", "Run Python script", "with args and venv"),
+    ("3", "Settings", "editor, paths, venv"),
+    ("4", "Update from git", "pull latest version"),
+    ("5", "Environments", "manage venv"),
+    ("6", "Run history", "recent executions"),
+    ("7", "Games", "small breaks"),
+    ("8", "About", "info"),
+    ("0", "Exit", ""),
 ]
 
 
 def render():
     clear()
     print_logo()
-    print("  main menu")
-    print("  " + "-" * min(term_width(), 46))
-    for key, label in MENU_ITEMS:
-        print(f"  [{key}] {label}")
-    print("  " + "-" * min(term_width(), 46))
-    print(f"  {DIM}Press a number, Q to quit.{RESET}")
+    print(f"{MUTED}  terminal hub for python on termux{RESET}")
+    print()
+
+    width = term_width()
+    print(box_top(" MAIN MENU "))
+    for key, label, desc in MENU_ITEMS:
+        line = (
+            f"{ACCENT}[{key}]{RESET} {BOLD}{label}{RESET}"
+            + (f"  {DIM}{desc}{RESET}" if desc else "")
+        )
+        print(ACCENT + V + RESET + " " + pad_ansi(line, width - 4) + " " + ACCENT + V + RESET)
+    print(box_bottom())
+    print(f"{MUTED}  press a number, Q to quit{RESET}")
 
 
 def main_menu() -> str:
@@ -44,8 +57,10 @@ def main_menu() -> str:
         elif key == "4":
             screen_update()
         elif key == "5":
-            screen_about()
-        elif key == "6":
             screen_envs()
-        elif key == "7":
+        elif key == "6":
             screen_history()
+        elif key == "7":
+            screen_games()
+        elif key == "8":
+            screen_about()
