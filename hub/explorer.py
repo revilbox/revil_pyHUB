@@ -1,4 +1,4 @@
-"""File explorer - strict, width-safe."""
+"""File explorer - strict, monochrome."""
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,12 +7,14 @@ from .ui import (
     clear, wait_key, readchar, term_width, print_header,
     box_top, box_line, box_sep, box_bottom, fit, vlen,
     ACCENT, TEXT, MUTED, RESET, BOLD,
-    SUCCESS, ERROR, V, RED,
+    SUCCESS, ERROR, V,
 )
 from .runner import run_python
 from .git_ops import git_pull
 from .ui import REPO_ROOT
 from . import config
+
+INVERSE = "\033[7m"
 
 
 def _list_dir(path: Path):
@@ -34,14 +36,6 @@ def _preview(path: Path) -> str:
         return f"<cannot read: {e}>"
 
 
-def _fmt_size(n: int) -> str:
-    for unit in ("B", "K", "M", "G"):
-        if n < 1024:
-            return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
-        n /= 1024
-    return f"{n:.1f}T"
-
-
 def screen_explorer():
     cfg = config.load()
     cwd = Path(cfg["start_dir"]).expanduser()
@@ -61,15 +55,13 @@ def screen_explorer():
         height = 20
         two_pane = width >= 72
 
-        # list area dims
         if two_pane:
             left_inner = 32
-            right_inner = width - 2 - left_inner - 3  # border + gap
+            right_inner = width - 2 - left_inner - 3
         else:
             left_inner = width - 2
             right_inner = 0
 
-        # visible window in list
         win = height
         start = max(0, index - win // 2)
         end = min(len(items), start + win)
@@ -78,18 +70,15 @@ def screen_explorer():
 
         visible = items[start:end]
 
-        # preview of selected
         sel_path = items[index] if items else None
         preview_lines = []
         if sel_path:
-            raw = _preview(sel_path)
-            preview_lines = raw.splitlines()[:win]
+            preview_lines = _preview(sel_path).splitlines()[:win]
 
         clear()
         print_header("FILE EXPLORER")
         print(box_top(width=width))
 
-        # path line
         venv_note = ""
         if cfg.get("active_venv"):
             venv_note = f"  {MUTED}venv:{RESET} {Path(cfg['active_venv']).name}"
@@ -106,43 +95,39 @@ def screen_explorer():
                 if item.is_dir():
                     name += "/"
                 if abs_i == index:
-                    left = f"{ACCENT}>{RESET} {BOLD}{TEXT}{name}{RESET}"
+                    # inverse video for selection - strict, monochrome
+                    left = fit(f"{INVERSE} {name}{RESET}", left_inner)
                 else:
-                    left = f"  {TEXT}{name}{RESET}"
-                left = fit(left, left_inner)
+                    left = fit(f"  {name}", left_inner)
 
                 if two_pane:
                     pv = preview_lines[i] if i < len(preview_lines) else ""
-                    pv = fit(pv, right_inner)
-                    print(ACCENT + V + RESET + " " + left + " " + ACCENT + V + RESET + " " + pv + " " + ACCENT + V + RESET)
+                    pv = fit(f"{MUTED}{pv}{RESET}", right_inner)
+                    print(MUTED + V + RESET + " " + left + " " + MUTED + V + RESET + " " + pv + " " + MUTED + V + RESET)
                 else:
-                    print(ACCENT + V + RESET + " " + left + " " + ACCENT + V + RESET)
+                    print(MUTED + V + RESET + " " + left + " " + MUTED + V + RESET)
 
-        # fill remaining rows so box stays fixed height
         for _ in range(win - len(visible)):
             if two_pane:
-                print(ACCENT + V + RESET + " " + " " * left_inner + " " + ACCENT + V + RESET + " " + " " * right_inner + " " + ACCENT + V + RESET)
+                print(MUTED + V + RESET + " " + " " * left_inner + " " + MUTED + V + RESET + " " + " " * right_inner + " " + MUTED + V + RESET)
             else:
-                print(ACCENT + V + RESET + " " + " " * left_inner + " " + ACCENT + V + RESET)
+                print(MUTED + V + RESET + " " + " " * left_inner + " " + MUTED + V + RESET)
 
         print(box_sep(width))
         print(box_line(
-            f"{ACCENT}ENTER{RESET} open  "
-            f"{ACCENT}E{RESET} edit  "
-            f"{ACCENT}N{RESET} file  "
-            f"{ACCENT}M{RESET} dir  "
-            f"{ACCENT}F2{RESET} rename  "
-            f"{ACCENT}DEL{RESET} del  "
-            f"{ACCENT}^L{RESET} goto  "
-            f"{ACCENT}B{RESET} back",
+            f"{MUTED}enter{RESET} open  "
+            f"{MUTED}e{RESET} edit  "
+            f"{MUTED}n{RESET} file  "
+            f"{MUTED}m{RESET} dir  "
+            f"{MUTED}f2{RESET} rename  "
+            f"{MUTED}del{RESET} delete  "
+            f"{MUTED}^l{RESET} goto  "
+            f"{MUTED}b{RESET} back",
             width,
         ))
-        # status
         sel = items[index].name if items else "-"
-        left_status = f"{MUTED}{index + 1}/{len(items)}{RESET}  {MUTED}sel:{RESET} {sel[:24]}"
-        if message:
-            left_status = message
-        right_status = f"{MUTED}U update  Q quit{RESET}"
+        left_status = message if message else f"{MUTED}{index + 1}/{len(items)}  {sel[:24]}{RESET}"
+        right_status = f"{MUTED}u update  q quit{RESET}"
         print(box_line(f"{left_status}    {right_status}", width))
         print(box_bottom(width))
         message = ""
@@ -186,7 +171,7 @@ def screen_explorer():
         elif key in ("b", "B"):
             return
         elif key in ("u", "U"):
-            message = f"{SUCCESS}{git_pull(REPO_ROOT)[:60]}{RESET}"
+            message = f"{MUTED}{git_pull(REPO_ROOT)[:60]}{RESET}"
             wait_key()
         elif key in ("q", "Q"):
             return
@@ -201,7 +186,7 @@ def screen_explorer():
                 else:
                     try:
                         p.write_text("")
-                        message = f"{SUCCESS}created {name}{RESET}"
+                        message = f"{MUTED}created {name}{RESET}"
                     except Exception as e:
                         message = f"{ERROR}{e}{RESET}"
         elif key in ("m", "M"):
@@ -212,7 +197,7 @@ def screen_explorer():
                 p = cwd / name
                 try:
                     p.mkdir(exist_ok=False)
-                    message = f"{SUCCESS}created {name}/{RESET}"
+                    message = f"{MUTED}created {name}/{RESET}"
                 except FileExistsError:
                     message = f"{ERROR}exists{RESET}"
                 except Exception as e:
@@ -226,21 +211,21 @@ def screen_explorer():
                 if new_name:
                     try:
                         target.rename(target.parent / new_name)
-                        message = f"{SUCCESS}renamed{RESET}"
+                        message = f"{MUTED}renamed{RESET}"
                     except Exception as e:
                         message = f"{ERROR}{e}{RESET}"
         elif key == readchar.key.DELETE or key == "\x1b[3~":
             if items and items[index].name != "..":
                 target = items[index]
                 clear()
-                print(f"{ERROR}delete '{target.name}'? y/N{RESET}")
+                print(f"delete '{target.name}'? y/N")
                 if readchar.readkey().lower() == "y":
                     try:
                         if target.is_dir():
                             shutil.rmtree(target)
                         else:
                             target.unlink()
-                        message = f"{SUCCESS}deleted{RESET}"
+                        message = f"{MUTED}deleted{RESET}"
                         index = max(0, index - 1)
                     except Exception as e:
                         message = f"{ERROR}{e}{RESET}"
