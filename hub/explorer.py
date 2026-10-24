@@ -1,13 +1,13 @@
-"""File explorer with preview and file ops."""
+"""File explorer - strict, width-safe."""
 import shutil
 import subprocess
 from pathlib import Path
 
 from .ui import (
     clear, wait_key, readchar, term_width, print_header,
-    box_top, box_mid, box_sep, box_bottom, pad_ansi, strip_ansi,
-    ACCENT, ACCENT2, BOLD, DIM, MUTED, RESET, V,
-    CYAN, GREEN, YELLOW, RED, SUCCESS, ERROR, WARN,
+    box_top, box_line, box_sep, box_bottom, fit, vlen,
+    ACCENT, TEXT, MUTED, RESET, BOLD,
+    SUCCESS, ERROR, V, RED,
 )
 from .runner import run_python
 from .git_ops import git_pull
@@ -16,13 +16,10 @@ from . import config
 
 
 def _list_dir(path: Path):
-    items = []
     try:
-        for entry in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
-            items.append(entry)
+        return sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
     except PermissionError:
-        pass
-    return items
+        return []
 
 
 def _preview(path: Path) -> str:
@@ -32,7 +29,7 @@ def _preview(path: Path) -> str:
         size = path.stat().st_size
         if size > 200_000:
             return f"<large file> {size} bytes"
-        return path.read_text(errors="replace")[:4000]
+        return path.read_text(errors="replace")
     except Exception as e:
         return f"<cannot read: {e}>"
 
@@ -43,20 +40,6 @@ def _fmt_size(n: int) -> str:
             return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
         n /= 1024
     return f"{n:.1f}T"
-
-
-def _item_line(item: Path, selected: bool, left_w: int) -> str:
-    name = item.name or str(item)
-    if item.is_dir():
-        name += "/"
-    marker = ">" if selected else " "
-    if selected:
-        color = ACCENT if item.is_dir() else GREEN
-        return color + BOLD + f"{marker} {name}"[: left_w].ljust(left_w) + RESET
-    base = f"  {name}"
-    if len(base) > left_w:
-        base = base[: left_w - 1] + "~"
-    return base.ljust(left_w)
 
 
 def screen_explorer():
@@ -75,45 +58,75 @@ def screen_explorer():
             index = len(items) - 1
 
         width = term_width()
-        two_pane = width >= 70
-        left_w = 34 if two_pane else width - 2
-        preview_w = max(10, width - left_w - 5) if two_pane else 0
+        height = 20
+        two_pane = width >= 72
+
+        # list area dims
+        if two_pane:
+            left_inner = 32
+            right_inner = width - 2 - left_inner - 3  # border + gap
+        else:
+            left_inner = width - 2
+            right_inner = 0
+
+        # visible window in list
+        win = height
+        start = max(0, index - win // 2)
+        end = min(len(items), start + win)
+        if end - start < win and start > 0:
+            start = max(0, end - win)
+
+        visible = items[start:end]
+
+        # preview of selected
+        sel_path = items[index] if items else None
+        preview_lines = []
+        if sel_path:
+            raw = _preview(sel_path)
+            preview_lines = raw.splitlines()[:win]
 
         clear()
         print_header("FILE EXPLORER")
-        path_line = f"{MUTED}path:{RESET} {cwd}"
+        print(box_top(width=width))
+
+        # path line
+        venv_note = ""
         if cfg.get("active_venv"):
-            path_line += f"  {MUTED}venv:{RESET} {ACCENT2}{Path(cfg['active_venv']).name}{RESET}"
-        print(box_mid(path_line, width))
+            venv_note = f"  {MUTED}venv:{RESET} {Path(cfg['active_venv']).name}"
+        print(box_line(f"{MUTED}path:{RESET} {cwd}{venv_note}", width))
         print(box_sep(width))
 
-        prev = _preview(items[index]) if items else ""
-        prev_lines = [ln[:preview_w] for ln in prev.splitlines()[:20]] if two_pane else []
-
-        rows = max(len(items), len(prev_lines)) if two_pane else len(items)
-        for i in range(rows):
-            if i < len(items):
-                item = items[i]
-                left = _item_line(item, i == index, left_w)
-                if item.is_file() and i == index:
-                    try:
-                        size_str = f"{MUTED}{_fmt_size(item.stat().st_size)}{RESET}"
-                    except Exception:
-                        size_str = ""
+        if not items:
+            print(box_line(f"{MUTED}(empty){RESET}", width))
+        else:
+            for i in range(len(visible)):
+                abs_i = start + i
+                item = items[abs_i]
+                name = item.name or str(item)
+                if item.is_dir():
+                    name += "/"
+                if abs_i == index:
+                    left = f"{ACCENT}>{RESET} {BOLD}{TEXT}{name}{RESET}"
                 else:
-                    size_str = ""
-            else:
-                left = " " * left_w
-                size_str = ""
+                    left = f"  {TEXT}{name}{RESET}"
+                left = fit(left, left_inner)
 
+                if two_pane:
+                    pv = preview_lines[i] if i < len(preview_lines) else ""
+                    pv = fit(pv, right_inner)
+                    print(ACCENT + V + RESET + " " + left + " " + ACCENT + V + RESET + " " + pv + " " + ACCENT + V + RESET)
+                else:
+                    print(ACCENT + V + RESET + " " + left + " " + ACCENT + V + RESET)
+
+        # fill remaining rows so box stays fixed height
+        for _ in range(win - len(visible)):
             if two_pane:
-                right = prev_lines[i] if i < len(prev_lines) else ""
-                print(ACCENT + V + RESET + " " + left + " " + ACCENT + V + RESET + " " + right.ljust(preview_w) + RESET)
+                print(ACCENT + V + RESET + " " + " " * left_inner + " " + ACCENT + V + RESET + " " + " " * right_inner + " " + ACCENT + V + RESET)
             else:
-                print(ACCENT + V + RESET + " " + left + " " + ACCENT + V + RESET)
+                print(ACCENT + V + RESET + " " + " " * left_inner + " " + ACCENT + V + RESET)
 
         print(box_sep(width))
-        keys_hint = (
+        print(box_line(
             f"{ACCENT}ENTER{RESET} open  "
             f"{ACCENT}E{RESET} edit  "
             f"{ACCENT}N{RESET} file  "
@@ -121,14 +134,17 @@ def screen_explorer():
             f"{ACCENT}F2{RESET} rename  "
             f"{ACCENT}DEL{RESET} del  "
             f"{ACCENT}^L{RESET} goto  "
-            f"{ACCENT}B{RESET} back"
-        )
-        print(box_mid(keys_hint, width))
-        total = len(items)
+            f"{ACCENT}B{RESET} back",
+            width,
+        ))
+        # status
         sel = items[index].name if items else "-"
-        status_left = f"{MUTED}items:{RESET} {total}  {MUTED}selected:{RESET} {sel}"
-        status_right = message if message else f"{MUTED}U update  Q quit{RESET}"
-        print_status_bar_custom(status_left, status_right, width)
+        left_status = f"{MUTED}{index + 1}/{len(items)}{RESET}  {MUTED}sel:{RESET} {sel[:24]}"
+        if message:
+            left_status = message
+        right_status = f"{MUTED}U update  Q quit{RESET}"
+        print(box_line(f"{left_status}    {right_status}", width))
+        print(box_bottom(width))
         message = ""
 
         key = readchar.readkey()
@@ -152,29 +168,31 @@ def screen_explorer():
             else:
                 clear()
                 print_header("PREVIEW")
-                print(_preview(target))
+                print(box_top())
+                for ln in _preview(target).splitlines()[:40]:
+                    print(box_line(ln))
+                print(box_bottom())
                 wait_key()
         elif key in ("e", "E"):
             if items and items[index].is_file():
                 target = items[index]
-                editor = cfg["editor"]
                 clear()
-                print(f"{MUTED}Opening {target} in {editor}...{RESET}")
+                print(f"{MUTED}opening in {cfg['editor']}...{RESET}")
                 try:
-                    subprocess.run([editor, str(target)])
+                    subprocess.run([cfg["editor"], str(target)])
                 except FileNotFoundError:
-                    print(f"{ERROR}Editor not found: {editor}{RESET}")
+                    print(f"{ERROR}editor not found: {cfg['editor']}{RESET}")
                     wait_key()
         elif key in ("b", "B"):
             return
         elif key in ("u", "U"):
-            message = f"{SUCCESS}{git_pull(REPO_ROOT)}{RESET}"
+            message = f"{SUCCESS}{git_pull(REPO_ROOT)[:60]}{RESET}"
             wait_key()
         elif key in ("q", "Q"):
             return
         elif key in ("n", "N"):
             clear()
-            print("New file name (empty to cancel):")
+            print("new file name (empty to cancel):")
             name = input("> ").strip()
             if name:
                 p = cwd / name
@@ -188,7 +206,7 @@ def screen_explorer():
                         message = f"{ERROR}{e}{RESET}"
         elif key in ("m", "M"):
             clear()
-            print("New directory name (empty to cancel):")
+            print("new directory name (empty to cancel):")
             name = input("> ").strip()
             if name:
                 p = cwd / name
@@ -203,7 +221,7 @@ def screen_explorer():
             if items and items[index].name != "..":
                 target = items[index]
                 clear()
-                print(f"Rename '{target.name}' to (empty to cancel):")
+                print(f"rename '{target.name}' to (empty to cancel):")
                 new_name = input("> ").strip()
                 if new_name:
                     try:
@@ -215,7 +233,7 @@ def screen_explorer():
             if items and items[index].name != "..":
                 target = items[index]
                 clear()
-                print(f"{ERROR}Delete '{target.name}'? y/N{RESET}")
+                print(f"{ERROR}delete '{target.name}'? y/N{RESET}")
                 if readchar.readkey().lower() == "y":
                     try:
                         if target.is_dir():
@@ -228,7 +246,7 @@ def screen_explorer():
                         message = f"{ERROR}{e}{RESET}"
         elif key == "\x0c":
             clear()
-            print("Go to path (empty to cancel):")
+            print("go to path (empty to cancel):")
             p = input("> ").strip()
             if p:
                 t = Path(p).expanduser()
@@ -237,9 +255,3 @@ def screen_explorer():
                     index = 0
                 else:
                     message = f"{ERROR}not a directory{RESET}"
-
-
-def print_status_bar_custom(left: str, right: str, width: int):
-    space = max(0, width - len(strip_ansi(left)) - len(strip_ansi(right)) - 4)
-    print(ACCENT + V + RESET + " " + left + " " * space + right + " " + ACCENT + V + RESET)
-    print(box_bottom(width))
