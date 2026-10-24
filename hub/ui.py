@@ -2,12 +2,15 @@
 import os
 import shutil
 import sys
+from pathlib import Path
 
 try:
     import readchar
 except ImportError:
     print("Missing dependency. Run: pip install readchar")
     sys.exit(1)
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # ANSI colors (reset always)
 RESET = "\033[0m"
