@@ -1,7 +1,10 @@
 """Main menu."""
 from .ui import clear, print_logo, readchar, term_width, DIM, RESET
 from .explorer import screen_explorer
-from .screens import screen_run, screen_settings, screen_update, screen_about
+from .screens import (
+    screen_run, screen_settings, screen_update, screen_about,
+    screen_envs, screen_history,
+)
 
 MENU_ITEMS = [
     ("1", "File explorer"),
@@ -9,6 +12,8 @@ MENU_ITEMS = [
     ("3", "Settings"),
     ("4", "Update from git"),
     ("5", "About"),
+    ("6", "Environments (venv)"),
+    ("7", "Run history"),
     ("0", "Exit"),
 ]
 
@@ -40,3 +45,7 @@ def main_menu() -> str:
             screen_update()
         elif key == "5":
             screen_about()
+        elif key == "6":
+            screen_envs()
+        elif key == "7":
+            screen_history()
