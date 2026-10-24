@@ -1,5 +1,6 @@
-"""Shared UI helpers: terminal width, colors, logo, boxes, clear, wait."""
+"""Shared UI helpers: width, colors, boxes, ansi-safe fit."""
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -12,46 +13,65 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# ---------- palette ----------
+# ---------- palette: strict, white + red accent ----------
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
-ITALIC = "\033[3m"
 
-BLACK = "\033[30m"
 RED = "\033[31m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
-BLUE = "\033[34m"
-MAGENTA = "\033[35m"
-CYAN = "\033[36m"
 WHITE = "\033[37m"
+BRIGHT_RED = "\033[91m"
+BRIGHT_WHITE = "\033[97m"
 
-BG_BLACK = "\033[40m"
-BG_BLUE = "\033[44m"
-BG_CYAN = "\033[46m"
-BG_MAGENTA = "\033[45m"
-
-ACCENT = CYAN
-ACCENT2 = MAGENTA
+ACCENT = BRIGHT_RED
+TEXT = BRIGHT_WHITE
 MUTED = DIM
 SUCCESS = GREEN
 ERROR = RED
 WARN = YELLOW
 
 # ---------- box chars ----------
-TL, TR, BL, BR = "╭", "╮", "╰", "╯"
+TL, TR, BL, BR = "┌", "┐", "└", "┘"
 H, V = "─", "│"
-LT, RT, LL, RR = "├", "┤", "╰", "╯"
+LT, RT = "├", "┤"
 
-LOGO = r"""
- ____            _ _   ____       _   _ _   _ ____  
-|  _ \ _____   _(_) | |  _ \_   _| | | | | | | __ ) 
-| |_) / _ \ \ / / | | | |_) | | | | |_| | | |  _ \ 
-|  _ <  __/\ V /| | | |  __/| |_| |  _  | |_| |_) |
-|_| \_\___| \_/ |_|_| |_|    \__, |_| |_|\___/|____/
-                             |___/                  
-"""
+ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def strip_ansi(s: str) -> str:
+    return ANSI_RE.sub("", s)
+
+
+def vlen(s: str) -> int:
+    return len(strip_ansi(s))
+
+
+def fit(s: str, width: int) -> str:
+    """Cut a possibly-colored string to visible width, ANSI-safe, then pad to exactly width."""
+    if width <= 0:
+        return ""
+    out = []
+    visible = 0
+    i = 0
+    while i < len(s):
+        m = ANSI_RE.match(s, i)
+        if m:
+            out.append(m.group(0))
+            i = m.end()
+            continue
+        if visible >= width:
+            # skip rest but keep reset at end
+            break
+        out.append(s[i])
+        visible += 1
+        i += 1
+    # pad
+    if visible < width:
+        out.append(" " * (width - visible))
+    out.append(RESET)
+    return "".join(out)
 
 
 def term_width() -> int:
@@ -62,40 +82,40 @@ def term_width() -> int:
     return max(40, min(w, 200))
 
 
+def term_height() -> int:
+    try:
+        h = shutil.get_terminal_size((80, 24)).lines
+    except Exception:
+        h = 24
+    return max(12, h)
+
+
 def clear():
     os.system("clear")
 
 
-def wait_key(msg="Press any key to return."):
-    print(f"\n{MUTED}{msg}{RESET}")
+def wait_key(msg="press any key"):
+    print(f"\n{DIM}{msg}{RESET}")
     readchar.readkey()
 
 
-def hr(char=H):
-    print(MUTED + char * term_width() + RESET)
-
-
-# ---------- boxes ----------
 def box_top(title: str = "", width: int | None = None) -> str:
     width = width or term_width()
+    inner = width - 2
     if not title:
-        return ACCENT + TL + H * (width - 2) + TR + RESET
+        return ACCENT + TL + H * inner + TR + RESET
     t = f" {title} "
-    pad = width - 2 - len(t)
-    if pad < 0:
-        t = t[: width - 2]
-        pad = 0
-    left = pad // 2
-    right = pad - left
-    return ACCENT + TL + H * left + BOLD + t + RESET + ACCENT + H * right + TR + RESET
+    t = fit(t, inner)
+    t_plain = strip_ansi(t)
+    left = max(0, (inner - len(t_plain)) // 2)
+    right = max(0, inner - len(t_plain) - left)
+    return ACCENT + TL + H * left + RESET + BOLD + t + RESET + ACCENT + H * right + TR + RESET
 
 
-def box_mid(text: str = "", width: int | None = None) -> str:
+def box_line(content: str, width: int | None = None) -> str:
     width = width or term_width()
     inner = width - 4
-    if len(text) > inner:
-        text = text[: inner - 1] + "~"
-    return ACCENT + V + RESET + " " + text.ljust(inner) + " " + ACCENT + V + RESET
+    return ACCENT + V + RESET + " " + fit(content, inner) + " " + ACCENT + V + RESET
 
 
 def box_sep(width: int | None = None) -> str:
@@ -108,54 +128,24 @@ def box_bottom(width: int | None = None) -> str:
     return ACCENT + BL + H * (width - 2) + BR + RESET
 
 
-def strip_ansi(s: str) -> str:
-    import re
-    return re.sub(r"\033\[[0-9;]*m", "", s)
-
-
-def pad_ansi(s: str, width: int) -> str:
-    return s + " " * max(0, width - len(strip_ansi(s)))
-
-
-# ---------- header ----------
 def print_header(section: str = ""):
     width = term_width()
-    title = f"{BOLD}{ACCENT}revil_pyHUB{RESET}"
+    left = f"{BOLD}{TEXT}revil_pyHUB{RESET}"
     if section:
-        title += f" {MUTED}/{RESET} {section}"
-    right = f"{MUTED}v0.4.0{RESET}"
-    left_plain = "revil_pyHUB" + (f" / {section}" if section else "")
-    pad = " " * max(1, width - len(left_plain) - len("v0.4.0"))
-    print(box_top())
-    print(ACCENT + V + RESET + " " + title + pad + right + " " + ACCENT + V + RESET)
-    print(box_sep())
-
-
-def print_logo():
-    clear()
-    print(ACCENT + LOGO + RESET)
+        left += f" {MUTED}/{RESET} {ACCENT}{section}{RESET}"
+    right = f"{MUTED}v0.5.0{RESET}"
+    lv = vlen(left)
+    rv = vlen(right)
+    space = max(1, width - lv - rv - 1)
+    print(box_top(width=width))
+    print(ACCENT + V + RESET + " " + left + " " * space + right + ACCENT + V + RESET)
+    print(box_sep(width))
 
 
 def print_status_bar(left: str, right: str = ""):
     width = term_width()
-    l = left
-    if right:
-        r = right
-        space = max(0, width - len(strip_ansi(l)) - len(strip_ansi(r)) - 4)
-        line = ACCENT + V + RESET + " " + l + " " * space + r + " " + ACCENT + V + RESET
-    else:
-        line = ACCENT + V + RESET + " " + l + " " * max(0, width - len(strip_ansi(l)) - 3) + ACCENT + V + RESET
-    print(line)
+    lv = vlen(left)
+    rv = vlen(right)
+    space = max(0, width - lv - rv - 3)
+    print(ACCENT + V + RESET + " " + left + " " * space + right + " " + ACCENT + V + RESET)
     print(box_bottom())
-
-
-# ---------- helpers ----------
-def badge(text: str, color: str = CYAN) -> str:
-    return f"{color}{BOLD}{text}{RESET}"
-
-
-def hint(keys: dict[str, str]) -> str:
-    parts = []
-    for k, v in keys.items():
-        parts.append(f"{ACCENT}{k}{RESET} {MUTED}{v}{RESET}")
-    return "  ".join(parts)
