@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from .ui import clear, wait_key, DIM, RESET, CYAN
+from .ui import clear, wait_key, MUTED, RESET
 from . import config, history
 
 
@@ -20,8 +20,8 @@ def run_python(path: Path, args: str = "", python_bin: str = "", record: bool = 
 
     argv = [py, str(path)] + (shlex.split(args) if args.strip() else [])
     clear()
-    print(f"{DIM}Interpreter: {py}{RESET}")
-    print(f"{DIM}Running: {' '.join(argv)}{RESET}")
+    print(f"{MUTED}interpreter: {py}{RESET}")
+    print(f"{MUTED}running: {' '.join(argv)}{RESET}")
     print("-" * 46)
 
     started = time.time()
@@ -32,7 +32,7 @@ def run_python(path: Path, args: str = "", python_bin: str = "", record: bool = 
     except KeyboardInterrupt:
         exit_code = -2
     except FileNotFoundError:
-        print(f"Interpreter not found: {py}")
+        print(f"interpreter not found: {py}")
         exit_code = -1
 
     duration = time.time() - started
@@ -48,5 +48,5 @@ def run_python(path: Path, args: str = "", python_bin: str = "", record: bool = 
             "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
         })
 
-    print(f"\n{DIM}Exit code: {exit_code}  Duration: {duration:.2f}s{RESET}")
-    wait_key("Finished. Press any key to return.")
+    print(f"\n{MUTED}exit: {exit_code}  duration: {duration:.2f}s{RESET}")
+    wait_key("press any key to return")
